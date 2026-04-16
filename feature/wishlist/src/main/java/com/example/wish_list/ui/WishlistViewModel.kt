@@ -24,7 +24,8 @@ import com.example.wish_list.domain.usecase.wishlist.CreateWishlistUseCase
 import com.example.wish_list.domain.usecase.wishlist.GetMyWishlistsUseCase
 import com.example.wish_list.domain.usecase.wishlist.GetWishlistByShareCodeUseCase
 import com.example.wish_list.domain.usecase.wishlist.GetWishlistDetailsUseCase
-import com.example.wish_list.feature.publicwishlist.ShareCodeSanitizer
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
 enum class HomeScreen {
     MY_WISHLISTS,
@@ -68,7 +69,8 @@ data class WishlistUiState(
     val isLoading: Boolean = false
 )
 
-class WishlistViewModel(
+@HiltViewModel
+class WishlistViewModel @Inject constructor(
     private val container: DemoDataContainer
 ) : BaseViewModel() {
     private val userRepository = container.userRepository
@@ -124,7 +126,7 @@ class WishlistViewModel(
     }
 
     fun updatePublicShareCode(value: String) {
-        uiState = uiState.copy(publicShareCode = ShareCodeSanitizer.sanitize(value))
+        uiState = uiState.copy(publicShareCode = value.trim().uppercase())
     }
 
     fun switchUser(userId: String) {

@@ -23,6 +23,7 @@ rootProject.name = "wish_list"
 include(":app")
 
 include(":core")
+include(":core:navigation")
 include(":feature:wishlist")
 include(":feature:public-wishlist")
 include(":feature:reservation")

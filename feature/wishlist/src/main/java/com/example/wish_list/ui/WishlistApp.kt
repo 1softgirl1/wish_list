@@ -40,16 +40,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.wish_list.core.navigation.AppNavigator
 import com.example.wish_list.core.util.PriceFormatter
 import com.example.wish_list.domain.model.GiftItem
 import com.example.wish_list.domain.model.GiftItemStatus
 import com.example.wish_list.domain.model.GiftPriority
 import com.example.wish_list.domain.model.User
 import com.example.wish_list.domain.model.Wishlist
-import com.example.wish_list.feature.reservation.ReservationStatusFormatter
 
 @Composable
-fun WishlistApp(viewModel: WishlistViewModel) {
+fun WishlistFeatureScreen(
+    navigator: AppNavigator,
+    viewModel: WishlistViewModel = hiltViewModel()
+) {
+    WishlistApp(
+        viewModel = viewModel,
+        onOpenPublicWishlist = navigator::openPublicWishlist,
+        onOpenReservations = navigator::openReservations
+    )
+}
+
+@Composable
+fun WishlistApp(
+    viewModel: WishlistViewModel,
+    onOpenPublicWishlist: () -> Unit = viewModel::showPublicWishlist,
+    onOpenReservations: () -> Unit = viewModel::showMyReservations
+) {
     val uiState = viewModel.uiState
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -87,8 +104,8 @@ fun WishlistApp(viewModel: WishlistViewModel) {
                     currentScreen = uiState.currentScreen,
                     onUserSelected = viewModel::switchUser,
                     onWishlistsClick = viewModel::showMyWishlists,
-                    onPublicClick = viewModel::showPublicWishlist,
-                    onReservationsClick = viewModel::showMyReservations
+                    onPublicClick = onOpenPublicWishlist,
+                    onReservationsClick = onOpenReservations
                 )
 
                 Box(
@@ -484,7 +501,7 @@ private fun MyReservationsScreen(
                             Text(item.giftTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text("Wishlist: ${item.wishlistTitle}")
                             Text("Owner: ${item.ownerName}")
-                            Text("Status: ${ReservationStatusFormatter.toUi(item.reservation.status.name)}")
+                            Text("Status: ${item.reservation.status.name}")
                             if (item.reservation.status.name == "ACTIVE") {
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Button(onClick = { onMarkGifted(item.reservation.id) }) {
