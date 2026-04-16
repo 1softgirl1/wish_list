@@ -24,6 +24,7 @@ import com.example.wish_list.domain.usecase.wishlist.CreateWishlistUseCase
 import com.example.wish_list.domain.usecase.wishlist.GetMyWishlistsUseCase
 import com.example.wish_list.domain.usecase.wishlist.GetWishlistByShareCodeUseCase
 import com.example.wish_list.domain.usecase.wishlist.GetWishlistDetailsUseCase
+import com.example.wish_list.feature.publicwishlist.ShareCodeSanitizer
 
 enum class HomeScreen {
     MY_WISHLISTS,
@@ -123,7 +124,7 @@ class WishlistViewModel(
     }
 
     fun updatePublicShareCode(value: String) {
-        uiState = uiState.copy(publicShareCode = value)
+        uiState = uiState.copy(publicShareCode = ShareCodeSanitizer.sanitize(value))
     }
 
     fun switchUser(userId: String) {

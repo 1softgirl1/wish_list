@@ -46,6 +46,7 @@ import com.example.wish_list.domain.model.GiftItemStatus
 import com.example.wish_list.domain.model.GiftPriority
 import com.example.wish_list.domain.model.User
 import com.example.wish_list.domain.model.Wishlist
+import com.example.wish_list.feature.reservation.ReservationStatusFormatter
 
 @Composable
 fun WishlistApp(viewModel: WishlistViewModel) {
@@ -483,7 +484,7 @@ private fun MyReservationsScreen(
                             Text(item.giftTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text("Wishlist: ${item.wishlistTitle}")
                             Text("Owner: ${item.ownerName}")
-                            Text("Status: ${item.reservation.status.name}")
+                            Text("Status: ${ReservationStatusFormatter.toUi(item.reservation.status.name)}")
                             if (item.reservation.status.name == "ACTIVE") {
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Button(onClick = { onMarkGifted(item.reservation.id) }) {
