@@ -32,42 +32,43 @@ class ArchitectureRulesKonsistTest {
             .withPackage("..data..")
             .assertFalse {
                 it.hasImport { importDeclaration ->
-                    val importName = importDeclaration.name
-                    importName.contains(".ui.")
+                    importDeclaration.name.contains(".ui.")
                 }
             }
     }
 
     @Test
-    fun `feature modules do not depend directly on each other`() {
-        Konsist
-            .scopeFromModule("feature/wishlist")
-            .files
-            .assertFalse {
-                it.hasImport { importDeclaration ->
-                    val importName = importDeclaration.name
-                    importName.startsWith("com.example.wish_list.feature.publicwishlist") ||
-                        importName.startsWith("com.example.wish_list.feature.reservation")
-                }
+    fun `feature modules do not depend directly on each other only through api`() {
+        val wishlistFeature = Konsist.scopeFromProject().files.withPackage("com.example.wish_list.feature.wishlist..")
+        wishlistFeature.assertFalse {
+            it.hasImport { importDeclaration ->
+                val importName = importDeclaration.name
+                (importName.startsWith("com.example.wish_list.feature.publicwishlist") ||
+                    importName.startsWith("com.example.wish_list.feature.reservation")) &&
+                    !importName.contains(".api.")
             }
+        }
 
-        Konsist
-            .scopeFromModule("feature/public-wishlist")
-            .files
-            .assertFalse {
-                it.hasImport { importDeclaration ->
-                    importDeclaration.name.startsWith("com.example.wish_list.feature.wishlist")
-                }
+        val publicWishlistFeature =
+            Konsist.scopeFromProject().files.withPackage("com.example.wish_list.feature.publicwishlist..")
+        publicWishlistFeature.assertFalse {
+            it.hasImport { importDeclaration ->
+                val importName = importDeclaration.name
+                (importName.startsWith("com.example.wish_list.feature.wishlist") ||
+                    importName.startsWith("com.example.wish_list.feature.reservation")) &&
+                    !importName.contains(".api.")
             }
+        }
 
-        Konsist
-            .scopeFromModule("feature/reservation")
-            .files
-            .assertFalse {
-                it.hasImport { importDeclaration ->
-                    importDeclaration.name.startsWith("com.example.wish_list.feature.wishlist")
-                }
+        val reservationFeature = Konsist.scopeFromProject().files.withPackage("com.example.wish_list.feature.reservation..")
+        reservationFeature.assertFalse {
+            it.hasImport { importDeclaration ->
+                val importName = importDeclaration.name
+                (importName.startsWith("com.example.wish_list.feature.wishlist") ||
+                    importName.startsWith("com.example.wish_list.feature.publicwishlist")) &&
+                    !importName.contains(".api.")
             }
+        }
     }
 
     @Test
@@ -96,9 +97,10 @@ class ArchitectureRulesKonsistTest {
         dataRepositories.assertTrue { it.resideInPackage("..data.repository..") }
 
         assertEquals(
-            "Каждому domain Repository интерфейсу должна соответствовать реализация в data",
+            "Each domain Repository interface should have an implementation in data",
             domainRepositories.size,
             dataRepositories.size
         )
     }
 }
+
