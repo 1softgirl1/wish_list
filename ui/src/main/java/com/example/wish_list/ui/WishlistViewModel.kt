@@ -24,13 +24,16 @@ import com.example.wish_list.domain.usecase.wishlist.CreateWishlistUseCase
 import com.example.wish_list.domain.usecase.wishlist.GetMyWishlistsUseCase
 import com.example.wish_list.domain.usecase.wishlist.GetWishlistByShareCodeUseCase
 import com.example.wish_list.domain.usecase.wishlist.GetWishlistDetailsUseCase
+import com.example.wish_list.ui.analytics.AnalyticsService
+import com.example.wish_list.ui.analytics.NoOpAnalyticsService
 
 enum class HomeScreen {
     MY_WISHLISTS,
     WISHLIST_DETAILS,
     GIFT_EDITOR,
     PUBLIC_WISHLIST,
-    MY_RESERVATIONS
+    MY_RESERVATIONS,
+    ABOUT
 }
 
 data class GiftEditorState(
@@ -68,7 +71,8 @@ data class WishlistUiState(
 )
 
 class WishlistViewModel(
-    private val container: DemoDataContainer
+    private val container: DemoDataContainer,
+    private val analyticsService: AnalyticsService = NoOpAnalyticsService
 ) : BaseViewModel() {
     private val userRepository = container.userRepository
     private val wishlistRepository = container.wishlistRepository
@@ -95,6 +99,10 @@ class WishlistViewModel(
         private set
 
     init {
+        analyticsService.trackEvent(
+            name = "screen_viewed",
+            params = mapOf("screen_name" to HomeScreen.MY_WISHLISTS.name.lowercase())
+        )
         refreshAppData()
     }
 
@@ -112,6 +120,14 @@ class WishlistViewModel(
 
     fun showMyReservations() {
         uiState = uiState.copy(currentScreen = HomeScreen.MY_RESERVATIONS, message = null)
+    }
+
+    fun showAbout() {
+        uiState = uiState.copy(currentScreen = HomeScreen.ABOUT, message = null)
+    }
+
+    fun postMessage(message: String) {
+        uiState = uiState.copy(message = message)
     }
 
     fun openCreateWishlistDialog() {
@@ -155,6 +171,10 @@ class WishlistViewModel(
                 description = description,
                 isShared = isShared,
                 shareCode = shareCode
+            )
+            analyticsService.trackEvent(
+                name = "wishlist_created",
+                params = mapOf("is_shared" to isShared)
             )
             refreshSnapshot()
             uiState = uiState.copy(
@@ -336,6 +356,10 @@ class WishlistViewModel(
             uiState = uiState.copy(isLoading = true)
             runCatching { block() }
                 .onFailure { throwable ->
+                    analyticsService.trackError(
+                        message = throwable.message ?: CoreConstants.DEFAULT_ERROR_MESSAGE,
+                        error = throwable
+                    )
                     uiState = uiState.copy(message = throwable.message ?: CoreConstants.DEFAULT_ERROR_MESSAGE)
                 }
             uiState = uiState.copy(isLoading = false)

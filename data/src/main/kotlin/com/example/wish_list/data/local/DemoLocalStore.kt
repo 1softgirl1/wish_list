@@ -13,7 +13,8 @@ class DemoLocalStore {
 
     val users = mutableListOf(
         UserEntity(id = "user_1", name = "Alice"),
-        UserEntity(id = "user_2", name = "Bob")
+        UserEntity(id = "user_2", name = "Bob"),
+        UserEntity(id = "user_3", name = "Charlie")
     )
 
     val wishlists = mutableListOf(

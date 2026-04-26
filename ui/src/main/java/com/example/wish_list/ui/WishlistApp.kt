@@ -1,9 +1,18 @@
 package com.example.wish_list.ui
 
+import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,15 +22,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -29,28 +45,54 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.example.wish_list.core.util.PriceFormatter
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import com.example.wish_list.domain.model.GiftItem
 import com.example.wish_list.domain.model.GiftItemStatus
 import com.example.wish_list.domain.model.GiftPriority
 import com.example.wish_list.domain.model.User
 import com.example.wish_list.domain.model.Wishlist
+import com.yandex.mapkit.MapKitFactory
+import com.yandex.mapkit.geometry.Point
+import com.yandex.mapkit.map.CameraPosition
+import com.yandex.mapkit.mapview.MapView
+import kotlinx.coroutines.launch
 
 @Composable
-fun WishlistApp(viewModel: WishlistViewModel) {
+fun WishlistApp(
+    viewModel: WishlistViewModel,
+    displayUserName: String,
+    onLogout: () -> Unit
+) {
     val uiState = viewModel.uiState
     val snackbarHostState = remember { SnackbarHostState() }
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
@@ -66,129 +108,230 @@ fun WishlistApp(viewModel: WishlistViewModel) {
         )
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            Column(
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                DrawerContent(
+                    displayUserName = displayUserName,
+                    currentScreen = uiState.currentScreen,
+                    onWishlistsClick = {
+                        viewModel.showMyWishlists()
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    onPublicClick = {
+                        viewModel.showPublicWishlist()
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    onReservationsClick = {
+                        viewModel.showMyReservations()
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    onAboutClick = {
+                        viewModel.showAbout()
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    onLogout = {
+                        coroutineScope.launch { drawerState.close() }
+                        onLogout()
+                    }
+                )
+            }
+        }
+    ) {
+        Scaffold(
+            topBar = {
+                AppTopBar(
+                    currentScreen = uiState.currentScreen,
+                    displayUserName = displayUserName,
+                    onOpenMenu = { coroutineScope.launch { drawerState.open() } }
+                )
+            },
+            snackbarHost = { SnackbarHost(snackbarHostState) }
+        ) { paddingValues ->
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.surface,
+                                MaterialTheme.colorScheme.surfaceContainerLowest
+                            )
+                        )
+                    )
+                    .padding(paddingValues)
             ) {
-                HeaderSection(
-                    users = uiState.users,
-                    currentUser = uiState.currentUser,
-                    currentScreen = uiState.currentScreen,
-                    onUserSelected = viewModel::switchUser,
-                    onWishlistsClick = viewModel::showMyWishlists,
-                    onPublicClick = viewModel::showPublicWishlist,
-                    onReservationsClick = viewModel::showMyReservations
-                )
-
-                Box(
+                Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    when (uiState.currentScreen) {
-                        HomeScreen.MY_WISHLISTS -> MyWishlistsScreen(
-                            wishlists = uiState.myWishlists,
-                            onCreateWishlist = viewModel::openCreateWishlistDialog,
-                            onOpenWishlist = viewModel::openWishlist
-                        )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        when (uiState.currentScreen) {
+                            HomeScreen.MY_WISHLISTS -> MyWishlistsScreen(
+                                wishlists = uiState.myWishlists,
+                                onCreateWishlist = viewModel::openCreateWishlistDialog,
+                                onOpenWishlist = viewModel::openWishlist
+                            )
 
-                        HomeScreen.WISHLIST_DETAILS -> WishlistDetailsScreen(
-                            wishlist = uiState.selectedWishlist,
-                            giftItems = uiState.selectedGiftItems,
-                            onAddGift = viewModel::openGiftEditorForNew,
-                            onEditGift = viewModel::openGiftEditorForEdit
-                        )
+                            HomeScreen.WISHLIST_DETAILS -> WishlistDetailsScreen(
+                                wishlist = uiState.selectedWishlist,
+                                giftItems = uiState.selectedGiftItems,
+                                onAddGift = viewModel::openGiftEditorForNew,
+                                onEditGift = viewModel::openGiftEditorForEdit
+                            )
 
-                        HomeScreen.GIFT_EDITOR -> uiState.giftEditorState?.let { editorState ->
-                            GiftEditorScreen(
-                                state = editorState,
-                                onBack = viewModel::closeGiftEditor,
-                                onSave = viewModel::saveGift
+                            HomeScreen.GIFT_EDITOR -> uiState.giftEditorState?.let { editorState ->
+                                GiftEditorScreen(
+                                    state = editorState,
+                                    onBack = viewModel::closeGiftEditor,
+                                    onSave = viewModel::saveGift
+                                )
+                            }
+
+                            HomeScreen.PUBLIC_WISHLIST -> PublicWishlistScreen(
+                                shareCode = uiState.publicShareCode,
+                                wishlist = uiState.publicWishlist,
+                                giftItems = uiState.publicGiftItems,
+                                currentUser = uiState.currentUser,
+                                onShareCodeChanged = viewModel::updatePublicShareCode,
+                                onLoad = viewModel::loadPublicWishlistFromInput,
+                                onReserve = viewModel::reserveGift
+                            )
+
+                            HomeScreen.MY_RESERVATIONS -> MyReservationsScreen(
+                                reservationCards = uiState.reservationCards,
+                                onCancelReservation = viewModel::cancelReservation,
+                                onMarkGifted = viewModel::markGiftAsGifted
+                            )
+
+                            HomeScreen.ABOUT -> AboutUsScreen(
+                                onMessage = viewModel::postMessage
                             )
                         }
-
-                        HomeScreen.PUBLIC_WISHLIST -> PublicWishlistScreen(
-                            shareCode = uiState.publicShareCode,
-                            wishlist = uiState.publicWishlist,
-                            giftItems = uiState.publicGiftItems,
-                            currentUser = uiState.currentUser,
-                            onShareCodeChanged = viewModel::updatePublicShareCode,
-                            onLoad = viewModel::loadPublicWishlistFromInput,
-                            onReserve = viewModel::reserveGift
-                        )
-
-                        HomeScreen.MY_RESERVATIONS -> MyReservationsScreen(
-                            reservationCards = uiState.reservationCards,
-                            onCancelReservation = viewModel::cancelReservation,
-                            onMarkGifted = viewModel::markGiftAsGifted
-                        )
                     }
                 }
-            }
 
-            if (uiState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                }
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppTopBar(
+    currentScreen: HomeScreen,
+    displayUserName: String,
+    onOpenMenu: () -> Unit
+) {
+    TopAppBar(
+        title = {
+            Column {
+                Text(
+                    text = currentScreen.title(),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = displayUserName,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        navigationIcon = {
+            IconButton(onClick = onOpenMenu) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = "Open navigation menu"
+                )
+            }
+        }
+    )
 }
 
 @Composable
-private fun HeaderSection(
-    users: List<User>,
-    currentUser: User?,
+private fun DrawerContent(
+    displayUserName: String,
     currentScreen: HomeScreen,
-    onUserSelected: (String) -> Unit,
     onWishlistsClick: () -> Unit,
     onPublicClick: () -> Unit,
-    onReservationsClick: () -> Unit
+    onReservationsClick: () -> Unit,
+    onAboutClick: () -> Unit,
+    onLogout: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val selectedScreen = currentScreen.menuScreen()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         Text(
             text = "Wish List MVP",
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
         Text(
-            text = "Current user: ${currentUser?.name ?: "Unknown"}",
-            style = MaterialTheme.typography.bodyLarge
+            text = "Signed in as $displayUserName",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            users.forEach { user ->
-                FilterChip(
-                    selected = currentUser?.id == user.id,
-                    onClick = { onUserSelected(user.id) },
-                    label = { Text(user.name) }
-                )
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AssistChip(
-                onClick = onWishlistsClick,
-                label = { Text(if (currentScreen == HomeScreen.MY_WISHLISTS) "My wishlists *" else "My wishlists") }
-            )
-            AssistChip(
-                onClick = onPublicClick,
-                label = { Text(if (currentScreen == HomeScreen.PUBLIC_WISHLIST) "Public view *" else "Public view") }
-            )
-            AssistChip(
-                onClick = onReservationsClick,
-                label = { Text(if (currentScreen == HomeScreen.MY_RESERVATIONS) "My reservations *" else "My reservations") }
-            )
-        }
-        HorizontalDivider()
+
+        NavigationDrawerItem(
+            label = { Text("My wishlists") },
+            selected = selectedScreen == HomeScreen.MY_WISHLISTS,
+            onClick = onWishlistsClick
+        )
+        NavigationDrawerItem(
+            label = { Text("Public view") },
+            selected = selectedScreen == HomeScreen.PUBLIC_WISHLIST,
+            onClick = onPublicClick
+        )
+        NavigationDrawerItem(
+            label = { Text("My reservations") },
+            selected = selectedScreen == HomeScreen.MY_RESERVATIONS,
+            onClick = onReservationsClick
+        )
+        NavigationDrawerItem(
+            label = { Text("About us") },
+            selected = selectedScreen == HomeScreen.ABOUT,
+            onClick = onAboutClick
+        )
+        NavigationDrawerItem(
+            label = { Text("Logout") },
+            selected = false,
+            onClick = onLogout
+        )
     }
 }
+
+private fun HomeScreen.menuScreen(): HomeScreen =
+    when (this) {
+        HomeScreen.WISHLIST_DETAILS,
+        HomeScreen.GIFT_EDITOR -> HomeScreen.MY_WISHLISTS
+        else -> this
+    }
+
+private fun HomeScreen.title(): String =
+    when (this) {
+        HomeScreen.MY_WISHLISTS -> "My wishlists"
+        HomeScreen.WISHLIST_DETAILS -> "Wishlist details"
+        HomeScreen.GIFT_EDITOR -> "Gift editor"
+        HomeScreen.PUBLIC_WISHLIST -> "Public view"
+        HomeScreen.MY_RESERVATIONS -> "My reservations"
+        HomeScreen.ABOUT -> "About us"
+    }
 
 @Composable
 private fun MyWishlistsScreen(
@@ -497,6 +640,166 @@ private fun MyReservationsScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AboutUsScreen(
+    onMessage: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val officePoint = remember { Point(55.3519, 86.0911) }
+    val mapView = remember { MapView(context) }
+    val fusedClient = remember(context) { LocationServices.getFusedLocationProviderClient(context) }
+    var showOpenSettings by remember { mutableStateOf(false) }
+
+    val requestRoute: () -> Unit = {
+        val tokenSource = CancellationTokenSource()
+        fusedClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, tokenSource.token)
+            .addOnSuccessListener { location ->
+                val launched = RouteLauncher.launchRoute(
+                    context = context,
+                    destinationLat = officePoint.latitude,
+                    destinationLon = officePoint.longitude,
+                    startLat = location?.latitude,
+                    startLon = location?.longitude
+                )
+                if (!launched) onMessage("Не удалось открыть навигатор")
+            }
+            .addOnFailureListener {
+                val launched = RouteLauncher.launchRoute(
+                    context = context,
+                    destinationLat = officePoint.latitude,
+                    destinationLon = officePoint.longitude
+                )
+                if (!launched) onMessage("Не удалось открыть маршрут")
+            }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { grantedMap ->
+        val fineGranted = grantedMap[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        val coarseGranted = grantedMap[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (fineGranted || coarseGranted) {
+            showOpenSettings = false
+            requestRoute()
+        } else {
+            onMessage("Доступ к геолокации отклонен. Строим маршрут без стартовой точки.")
+            val launched = RouteLauncher.launchRoute(
+                context = context,
+                destinationLat = officePoint.latitude,
+                destinationLon = officePoint.longitude
+            )
+            if (!launched) onMessage("Не удалось открыть маршрут")
+            val permanentlyDenied = activity != null &&
+                !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION) &&
+                !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)
+            showOpenSettings = permanentlyDenied
+        }
+    }
+
+    LaunchedEffect(mapView) {
+        mapView.mapWindow.map.move(
+            CameraPosition(officePoint, 16.0f, 0.0f, 0.0f)
+        )
+        mapView.mapWindow.map.mapObjects.clear()
+        mapView.mapWindow.map.mapObjects.addPlacemark(officePoint)
+    }
+
+    DisposableEffect(lifecycleOwner, mapView) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> {
+                    MapKitFactory.getInstance().onStart()
+                    mapView.onStart()
+                }
+
+                Lifecycle.Event.ON_STOP -> {
+                    mapView.onStop()
+                    MapKitFactory.getInstance().onStop()
+                }
+
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "О нас",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = "Kuzbass Wish Lab - локальная команда, которая создает удобные цифровые сервисы для планирования подарков и совместных праздников."
+        )
+        Text(
+            text = "Офис: Россия, Кемеровская область - Кузбасс, г. Кемерово, Красная ул., 6",
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        AndroidView(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(280.dp)
+                .padding(vertical = 4.dp),
+            factory = { mapView }
+        )
+
+        Button(
+            onClick = {
+                val fineLocationGranted = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+                val coarseLocationGranted = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+
+                if (fineLocationGranted || coarseLocationGranted) {
+                    showOpenSettings = false
+                    requestRoute()
+                } else {
+                    permissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Построить маршрут до офиса")
+        }
+
+        if (showOpenSettings) {
+            OutlinedButton(
+                onClick = {
+                    val intent = Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:${context.packageName}")
+                    )
+                    context.startActivity(intent)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Открыть настройки приложения")
             }
         }
     }
