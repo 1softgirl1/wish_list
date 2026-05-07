@@ -76,6 +76,7 @@ import com.example.wish_list.domain.model.GiftItem
 import com.example.wish_list.domain.model.GiftItemStatus
 import com.example.wish_list.domain.model.GiftPriority
 import com.example.wish_list.domain.model.User
+import com.example.wish_list.domain.model.UserProfile
 import com.example.wish_list.domain.model.Wishlist
 import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.geometry.Point
@@ -87,6 +88,7 @@ import kotlinx.coroutines.launch
 fun WishlistApp(
     viewModel: WishlistViewModel,
     displayUserName: String,
+    greetingText: String,
     onLogout: () -> Unit
 ) {
     val uiState = viewModel.uiState
@@ -127,6 +129,10 @@ fun WishlistApp(
                         viewModel.showMyReservations()
                         coroutineScope.launch { drawerState.close() }
                     },
+                    onProfileClick = {
+                        viewModel.showProfile()
+                        coroutineScope.launch { drawerState.close() }
+                    },
                     onAboutClick = {
                         viewModel.showAbout()
                         coroutineScope.launch { drawerState.close() }
@@ -144,6 +150,7 @@ fun WishlistApp(
                 AppTopBar(
                     currentScreen = uiState.currentScreen,
                     displayUserName = displayUserName,
+                    greetingText = greetingText,
                     onOpenMenu = { coroutineScope.launch { drawerState.open() } }
                 )
             },
@@ -211,6 +218,10 @@ fun WishlistApp(
                                 onMarkGifted = viewModel::markGiftAsGifted
                             )
 
+                            HomeScreen.PROFILE -> ProfileScreen(
+                                profile = uiState.userProfile
+                            )
+
                             HomeScreen.ABOUT -> AboutUsScreen(
                                 onMessage = viewModel::postMessage
                             )
@@ -231,6 +242,7 @@ fun WishlistApp(
 private fun AppTopBar(
     currentScreen: HomeScreen,
     displayUserName: String,
+    greetingText: String,
     onOpenMenu: () -> Unit
 ) {
     TopAppBar(
@@ -245,6 +257,11 @@ private fun AppTopBar(
                     text = displayUserName,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = greetingText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         },
@@ -266,6 +283,7 @@ private fun DrawerContent(
     onWishlistsClick: () -> Unit,
     onPublicClick: () -> Unit,
     onReservationsClick: () -> Unit,
+    onProfileClick: () -> Unit,
     onAboutClick: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -304,6 +322,11 @@ private fun DrawerContent(
             onClick = onReservationsClick
         )
         NavigationDrawerItem(
+            label = { Text("Profile") },
+            selected = selectedScreen == HomeScreen.PROFILE,
+            onClick = onProfileClick
+        )
+        NavigationDrawerItem(
             label = { Text("About us") },
             selected = selectedScreen == HomeScreen.ABOUT,
             onClick = onAboutClick
@@ -330,6 +353,7 @@ private fun HomeScreen.title(): String =
         HomeScreen.GIFT_EDITOR -> "Gift editor"
         HomeScreen.PUBLIC_WISHLIST -> "Public view"
         HomeScreen.MY_RESERVATIONS -> "My reservations"
+        HomeScreen.PROFILE -> "Profile"
         HomeScreen.ABOUT -> "About us"
     }
 
@@ -640,6 +664,36 @@ private fun MyReservationsScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileScreen(profile: UserProfile?) {
+    if (profile == null) {
+        EmptyState("Profile is loading...")
+        return
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("User profile", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("User ID: ${profile.userId}")
+                Text("Name: ${profile.name}")
+                Text("Email: ${profile.email.ifBlank { "-" }}")
+                Text("FCM token: ${profile.fcmToken.ifBlank { "-" }}")
+                Text("Updated at: ${profile.updatedAtMillis}")
             }
         }
     }

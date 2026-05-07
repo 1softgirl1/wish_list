@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<defaultsMap>
+    <entry>
+        <key>KEY_GREETING</key>
+        <value>Добро пожаловать!</value>
+    </entry>
+    <entry>
+        <key>is_new_feature_enabled</key>
+        <value>false</value>
+    </entry>
+    <entry>
+        <key>max_items_per_page</key>
+        <value>20</value>
+    </entry>
+</defaultsMap>

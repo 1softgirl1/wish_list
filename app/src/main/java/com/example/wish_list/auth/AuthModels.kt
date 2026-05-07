@@ -8,6 +8,8 @@ enum class AuthProvider {
 data class AuthSession(
     val token: String,
     val userName: String,
+    val userId: String,
+    val email: String?,
     val provider: AuthProvider,
     val expiresAtMillis: Long
 ) {

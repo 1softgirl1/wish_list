@@ -2,10 +2,13 @@ package com.example.wish_list
 
 import android.app.Application
 import android.util.Log
+import com.example.wish_list.firebase.AppNotificationHelper
 import io.appmetrica.analytics.AppMetrica
 import io.appmetrica.analytics.AppMetricaConfig
 import com.vk.id.VKID
 import com.yandex.mapkit.MapKitFactory
+import com.google.firebase.remoteconfig.FirebaseRemoteConfig
+import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
 
 class WishListApplication : Application() {
     override fun onCreate() {
@@ -42,11 +45,23 @@ class WishListApplication : Application() {
 
         runCatching { VKID.init(this) }
             .onFailure { Log.e("WishListApplication", "VKID initialization failed", it) }
+
+        AppNotificationHelper(this).ensureChannel()
+        initializeRemoteConfig()
     }
 
     private fun String.maskForLog(): String {
         if (isBlank()) return "<empty>"
         if (length <= 8) return "*".repeat(length)
         return "${take(4)}***${takeLast(4)}"
+    }
+
+    private fun initializeRemoteConfig() {
+        val remoteConfig = FirebaseRemoteConfig.getInstance()
+        val settings = FirebaseRemoteConfigSettings.Builder()
+            .setMinimumFetchIntervalInSeconds(if (BuildConfig.DEBUG) 0 else 3600)
+            .build()
+        remoteConfig.setConfigSettingsAsync(settings)
+        remoteConfig.setDefaultsAsync(R.xml.remote_config_defaults)
     }
 }

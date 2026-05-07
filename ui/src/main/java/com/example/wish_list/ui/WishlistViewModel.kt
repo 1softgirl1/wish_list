@@ -1,4 +1,4 @@
-package com.example.wish_list.ui
+﻿package com.example.wish_list.ui
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,7 +12,9 @@ import com.example.wish_list.domain.model.GiftItemStatus
 import com.example.wish_list.domain.model.GiftPriority
 import com.example.wish_list.domain.model.Reservation
 import com.example.wish_list.domain.model.User
+import com.example.wish_list.domain.model.UserProfile
 import com.example.wish_list.domain.model.Wishlist
+import com.example.wish_list.domain.repository.RealtimeWishlistRepository
 import com.example.wish_list.domain.usecase.gift.AddGiftItemUseCase
 import com.example.wish_list.domain.usecase.gift.GetGiftItemsForWishlistUseCase
 import com.example.wish_list.domain.usecase.gift.UpdateGiftItemUseCase
@@ -26,6 +28,7 @@ import com.example.wish_list.domain.usecase.wishlist.GetWishlistByShareCodeUseCa
 import com.example.wish_list.domain.usecase.wishlist.GetWishlistDetailsUseCase
 import com.example.wish_list.ui.analytics.AnalyticsService
 import com.example.wish_list.ui.analytics.NoOpAnalyticsService
+import kotlinx.coroutines.flow.collect
 
 enum class HomeScreen {
     MY_WISHLISTS,
@@ -33,6 +36,7 @@ enum class HomeScreen {
     GIFT_EDITOR,
     PUBLIC_WISHLIST,
     MY_RESERVATIONS,
+    PROFILE,
     ABOUT
 }
 
@@ -66,6 +70,8 @@ data class WishlistUiState(
     val publicWishlist: Wishlist? = null,
     val publicGiftItems: List<GiftItem> = emptyList(),
     val reservationCards: List<ReservationCardState> = emptyList(),
+    val greetingText: String = "Добро пожаловать!",
+    val userProfile: UserProfile? = null,
     val message: String? = null,
     val isLoading: Boolean = false
 )
@@ -94,6 +100,9 @@ class WishlistViewModel(
     private val markGiftAsGiftedUseCase =
         MarkGiftAsGiftedUseCase(userRepository, giftItemRepository, reservationRepository)
     private val getMyReservationsUseCase = GetMyReservationsUseCase(userRepository, reservationRepository)
+    private val realtimeWishlistRepository: RealtimeWishlistRepository? = container.realtimeWishlistRepository
+    private var shouldUseFirestoreRealtime = false
+    private var observedOwnerUserId: String? = null
 
     var uiState by mutableStateOf(WishlistUiState())
         private set
@@ -110,6 +119,13 @@ class WishlistViewModel(
         uiState = uiState.copy(message = null)
     }
 
+    fun applyRemoteConfig(greetingText: String, enableFirestoreRealtime: Boolean) {
+        uiState = uiState.copy(greetingText = greetingText)
+        shouldUseFirestoreRealtime = enableFirestoreRealtime
+        val currentUserId = uiState.currentUser?.id ?: return
+        ensureRealtimeSubscription(currentUserId)
+    }
+
     fun showMyWishlists() {
         uiState = uiState.copy(currentScreen = HomeScreen.MY_WISHLISTS, message = null)
     }
@@ -124,6 +140,14 @@ class WishlistViewModel(
 
     fun showAbout() {
         uiState = uiState.copy(currentScreen = HomeScreen.ABOUT, message = null)
+    }
+
+    fun showProfile() {
+        uiState = uiState.copy(currentScreen = HomeScreen.PROFILE, message = null)
+    }
+
+    fun applyUserProfile(profile: UserProfile?) {
+        uiState = uiState.copy(userProfile = profile)
     }
 
     fun postMessage(message: String) {
@@ -328,6 +352,20 @@ class WishlistViewModel(
             myWishlists = wishlists,
             reservationCards = reservationCards
         )
+        ensureRealtimeSubscription(currentUser?.id)
+    }
+
+    private fun ensureRealtimeSubscription(ownerUserId: String?) {
+        if (!shouldUseFirestoreRealtime) return
+        val repository = realtimeWishlistRepository ?: return
+        if (ownerUserId.isNullOrBlank() || observedOwnerUserId == ownerUserId) return
+
+        observedOwnerUserId = ownerUserId
+        launchInScope {
+            repository.observeWishlistsByOwner(ownerUserId).collect { wishlists ->
+                uiState = uiState.copy(myWishlists = wishlists)
+            }
+        }
     }
 
     private suspend fun loadWishlistDetails(wishlistId: String) {
@@ -366,3 +404,4 @@ class WishlistViewModel(
         }
     }
 }
+

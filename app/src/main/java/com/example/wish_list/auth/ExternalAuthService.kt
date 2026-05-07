@@ -41,10 +41,12 @@ class ExternalAuthService(
                 val authResult = when (result) {
                     is YandexAuthResult.Success -> {
                         thread(start = true) {
-                            val userName = resolveYandexUserName(result.token.value)
+                            val profile = resolveYandexProfile(result.token.value)
                             val session = AuthSession(
                                 token = result.token.value,
-                                userName = userName,
+                                userName = profile.name,
+                                userId = profile.userId,
+                                email = profile.email,
                                 provider = AuthProvider.YANDEX,
                                 expiresAtMillis = System.currentTimeMillis() + (result.token.expiresIn * 1000)
                             )
@@ -103,6 +105,8 @@ class ExternalAuthService(
                             AuthSession(
                                 token = token,
                                 userName = userName,
+                                userId = "${AuthProvider.VK.name.lowercase()}_${token.take(12)}",
+                                email = null,
                                 provider = AuthProvider.VK,
                                 expiresAtMillis = accessToken.expireTime * 1000
                             )
@@ -155,7 +159,7 @@ class ExternalAuthService(
         private const val DEFAULT_AUTH_ERROR = "Authorization failed"
     }
 
-    private fun resolveYandexUserName(accessToken: String): String {
+    private fun resolveYandexProfile(accessToken: String): YandexProfile {
         var connection: HttpURLConnection? = null
         return try {
             val url = URL(YANDEX_USER_INFO_URL)
@@ -166,14 +170,27 @@ class ExternalAuthService(
                 setRequestProperty("Authorization", "OAuth $accessToken")
             }
 
-            val http = connection ?: return YANDEX_FALLBACK_NAME
+            val http = connection ?: return YandexProfile(
+                userId = "${AuthProvider.YANDEX.name.lowercase()}_${accessToken.take(12)}",
+                name = YANDEX_FALLBACK_NAME,
+                email = null
+            )
             if (http.responseCode !in 200..299) {
-                YANDEX_FALLBACK_NAME
+                YandexProfile(
+                    userId = "${AuthProvider.YANDEX.name.lowercase()}_${accessToken.take(12)}",
+                    name = YANDEX_FALLBACK_NAME,
+                    email = null
+                )
             } else {
                 val body = http.inputStream.bufferedReader().use { it.readText() }
                 val json = JSONObject(body)
+                val userId = json.optString("id")
+                    .ifBlank { "${AuthProvider.YANDEX.name.lowercase()}_${accessToken.take(12)}" }
+                val email = json.optString("default_email")
+                    .ifBlank { json.optString("email") }
+                    .ifBlank { null }
                 val displayName = json.optString("display_name")
-                if (displayName.isNotBlank()) {
+                val resolvedName = if (displayName.isNotBlank()) {
                     displayName
                 } else {
                     val realName = json.optString("real_name")
@@ -188,11 +205,26 @@ class ExternalAuthService(
                             .ifBlank { YANDEX_FALLBACK_NAME }
                     }
                 }
+                YandexProfile(
+                    userId = userId,
+                    name = resolvedName,
+                    email = email
+                )
             }
         } catch (_: Exception) {
-            YANDEX_FALLBACK_NAME
+            YandexProfile(
+                userId = "${AuthProvider.YANDEX.name.lowercase()}_${accessToken.take(12)}",
+                name = YANDEX_FALLBACK_NAME,
+                email = null
+            )
         } finally {
             connection?.disconnect()
         }
     }
+
+    private data class YandexProfile(
+        val userId: String,
+        val name: String,
+        val email: String?
+    )
 }
