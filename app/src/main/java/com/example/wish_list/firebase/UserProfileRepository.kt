@@ -20,8 +20,7 @@ class UserProfileRepository @Inject constructor(
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w(TAG, "Listen failed", error)
-                    // Firestore permission/network errors should not crash UI observers.
-                    trySend(null)
+                    close(error)
                     return@addSnapshotListener
                 }
                 if (snapshot == null || !snapshot.exists()) {
@@ -29,10 +28,17 @@ class UserProfileRepository @Inject constructor(
                     return@addSnapshotListener
                 }
                 val dto = snapshot.toObject(FirestoreUserProfileDto::class.java)
+                val activeExternalUserId = snapshot.getString(FIELD_ACTIVE_EXTERNAL_USER_ID).orEmpty()
+                val providerProfile = snapshot.get(FIELD_PROFILES)?.let { raw ->
+                    @Suppress("UNCHECKED_CAST")
+                    (raw as? Map<String, Any?>)?.get(activeExternalUserId) as? Map<String, Any?>
+                }
+                val providerName = providerProfile?.get("name") as? String
+                val providerEmail = providerProfile?.get("email") as? String
                 val profile = UserProfile(
                     userId = userId,
-                    name = dto?.name.orEmpty(),
-                    email = dto?.email.orEmpty(),
+                    name = providerName?.takeIf { it.isNotBlank() } ?: dto?.name.orEmpty(),
+                    email = providerEmail?.takeIf { it.isNotBlank() } ?: dto?.email.orEmpty(),
                     fcmToken = dto?.fcmToken.orEmpty(),
                     updatedAtMillis = dto?.updatedAt?.time ?: 0L
                 )
@@ -41,17 +47,33 @@ class UserProfileRepository @Inject constructor(
         awaitClose { registration.remove() }
     }
 
-    fun saveOrUpdateProfile(session: AuthSession, fcmToken: String?) {
+    fun saveOrUpdateProfile(documentUserId: String, session: AuthSession, fcmToken: String?) {
+        val profileEntry = mapOf(
+            "name" to session.userName,
+            "email" to session.email.orEmpty(),
+            "provider" to session.provider.name,
+            "updatedAt" to Date()
+        )
         val profile = FirestoreUserProfileDto(
             name = session.userName,
             email = session.email.orEmpty(),
             fcmToken = fcmToken.orEmpty(),
             updatedAt = Date()
         )
+        val payload = hashMapOf<String, Any>(
+            FIELD_NAME to profile.name,
+            FIELD_EMAIL to profile.email,
+            FIELD_UPDATED_AT to profile.updatedAt,
+            FIELD_ACTIVE_EXTERNAL_USER_ID to session.userId,
+            "$FIELD_PROFILES.${session.userId}" to profileEntry
+        )
+        if (!fcmToken.isNullOrBlank()) {
+            payload[FIELD_FCM_TOKEN] = fcmToken
+        }
         firestore.collection(COLLECTION_USERS)
-            .document(session.userId)
-            .set(profile)
-            .addOnSuccessListener { Log.d(TAG, "Profile saved for ${session.userId}") }
+            .document(documentUserId)
+            .set(payload, SetOptions.merge())
+            .addOnSuccessListener { Log.d(TAG, "Profile saved for $documentUserId") }
             .addOnFailureListener { e -> Log.w(TAG, "Error saving profile", e) }
     }
 
@@ -69,6 +91,12 @@ class UserProfileRepository @Inject constructor(
     private companion object {
         private const val TAG = "UserProfileRepository"
         private const val COLLECTION_USERS = "users"
+        private const val FIELD_NAME = "name"
+        private const val FIELD_EMAIL = "email"
+        private const val FIELD_FCM_TOKEN = "fcmToken"
+        private const val FIELD_UPDATED_AT = "updatedAt"
+        private const val FIELD_PROFILES = "profiles"
+        private const val FIELD_ACTIVE_EXTERNAL_USER_ID = "activeExternalUserId"
     }
 }
 

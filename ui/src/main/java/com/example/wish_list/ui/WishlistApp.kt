@@ -38,38 +38,34 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -100,7 +96,6 @@ import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.geometry.Point
 import com.yandex.mapkit.map.CameraPosition
 import com.yandex.mapkit.mapview.MapView
-import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.RoundedCornerShape
 
 @Composable
@@ -109,12 +104,10 @@ fun WishlistApp(
     displayUserName: String,
     greetingText: String,
     onLogout: () -> Unit,
-    onOpenHybridComposeDemo: () -> Unit
+    onOpenAboutUs: () -> Unit
 ) {
     val uiState = viewModel.uiState
     val snackbarHostState = remember { SnackbarHostState() }
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
@@ -130,51 +123,25 @@ fun WishlistApp(
         )
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet {
-                DrawerContent(
-                    displayUserName = displayUserName,
-                    currentScreen = uiState.currentScreen,
-                    onWishlistsClick = {
-                        viewModel.showMyWishlists()
-                        coroutineScope.launch { drawerState.close() }
-                    },
-                    onPublicClick = {
-                        viewModel.showPublicWishlist()
-                        coroutineScope.launch { drawerState.close() }
-                    },
-                    onReservationsClick = {
-                        viewModel.showMyReservations()
-                        coroutineScope.launch { drawerState.close() }
-                    },
-                    onProfileClick = {
-                        viewModel.showProfile()
-                        coroutineScope.launch { drawerState.close() }
-                    },
-                    onAboutClick = {
-                        viewModel.showAbout()
-                        coroutineScope.launch { drawerState.close() }
-                    },
-                    onLogout = {
-                        coroutineScope.launch { drawerState.close() }
-                        onLogout()
-                    }
-                )
-            }
-        }
-    ) {
         Scaffold(
             topBar = {
                 AppTopBar(
                     currentScreen = uiState.currentScreen,
                     displayUserName = displayUserName,
-                    greetingText = greetingText,
-                    onOpenMenu = { coroutineScope.launch { drawerState.open() } }
+                    appTitle = greetingText
                 )
             },
-            snackbarHost = { SnackbarHost(snackbarHostState) }
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            bottomBar = {
+                BottomPillBar(
+                    currentScreen = uiState.currentScreen,
+                    onWishlists = viewModel::showMyWishlists,
+                    onPublic = viewModel::showPublicWishlist,
+                    onFriends = viewModel::showMyReservations,
+                    onProfile = viewModel::showProfile
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.background
         ) { paddingValues ->
             Box(
                 modifier = Modifier
@@ -183,7 +150,7 @@ fun WishlistApp(
                         Brush.verticalGradient(
                             colors = listOf(
                                 MaterialTheme.colorScheme.background,
-                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
+                                MaterialTheme.colorScheme.background
                             )
                         )
                     )
@@ -255,6 +222,7 @@ fun WishlistApp(
                             HomeScreen.PUBLIC_WISHLIST -> PublicWishlistScreen(
                                 shareCode = uiState.publicShareCode,
                                 wishlist = uiState.publicWishlist,
+                                ownerName = uiState.publicWishlistOwnerName,
                                 giftItems = uiState.publicGiftItems,
                                 currentUser = uiState.currentUser,
                                 onShareCodeChanged = viewModel::updatePublicShareCode,
@@ -269,12 +237,19 @@ fun WishlistApp(
                             )
 
                             HomeScreen.PROFILE -> ProfileScreen(
-                                profile = uiState.userProfile
+                                profile = uiState.userProfile,
+                                currentUser = uiState.currentUser,
+                                authorizedUserId = uiState.authorizedUserId,
+                                authorizedUserName = uiState.authorizedUserName,
+                                authorizedUserEmail = uiState.authorizedUserEmail,
+                                displayUserName = displayUserName,
+                                onOpenAbout = onOpenAboutUs,
+                                onLogout = onLogout
                             )
 
-                            HomeScreen.ABOUT -> AboutUsScreen(
-                                onMessage = viewModel::postMessage,
-                                onOpenHybridComposeDemo = onOpenHybridComposeDemo
+                            HomeScreen.ABOUT -> AboutUsRedirectScreen(
+                                onOpenAboutUs = onOpenAboutUs,
+                                onReturnToProfile = viewModel::showProfile
                             )
                         }
                         }
@@ -291,7 +266,18 @@ fun WishlistApp(
                 }
             }
         }
+}
+
+@Composable
+private fun AboutUsRedirectScreen(
+    onOpenAboutUs: () -> Unit,
+    onReturnToProfile: () -> Unit
+) {
+    LaunchedEffect(Unit) {
+        onOpenAboutUs()
+        onReturnToProfile()
     }
+    EmptyState("Opening About us...")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -299,108 +285,28 @@ fun WishlistApp(
 private fun AppTopBar(
     currentScreen: HomeScreen,
     displayUserName: String,
-    greetingText: String,
-    onOpenMenu: () -> Unit
+    appTitle: String
 ) {
+    val resolvedTitle = appTitle.ifBlank { "dreamboard" }
     TopAppBar(
         title = {
             Column {
                 Text(
-                    text = currentScreen.title(),
+                    text = resolvedTitle,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Hi, $displayUserName",
+                    text = currentScreen.title(),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    text = greetingText,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
             }
         },
-        navigationIcon = {
-            IconButton(onClick = onOpenMenu) {
-                Icon(
-                    imageVector = Icons.Filled.MoreVert,
-                    contentDescription = "Open navigation menu",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
+        navigationIcon = {}
     )
-}
-
-@Composable
-private fun DrawerContent(
-    displayUserName: String,
-    currentScreen: HomeScreen,
-    onWishlistsClick: () -> Unit,
-    onPublicClick: () -> Unit,
-    onReservationsClick: () -> Unit,
-    onProfileClick: () -> Unit,
-    onAboutClick: () -> Unit,
-    onLogout: () -> Unit
-) {
-    val selectedScreen = currentScreen.menuScreen()
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        FrostedCard {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "Wish List",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Signed in as $displayUserName",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        NavigationDrawerItem(
-            label = { Text("My wishlists") },
-            selected = selectedScreen == HomeScreen.MY_WISHLISTS,
-            onClick = onWishlistsClick
-        )
-        NavigationDrawerItem(
-            label = { Text("Public view") },
-            selected = selectedScreen == HomeScreen.PUBLIC_WISHLIST,
-            onClick = onPublicClick
-        )
-        NavigationDrawerItem(
-            label = { Text("My reservations") },
-            selected = selectedScreen == HomeScreen.MY_RESERVATIONS,
-            onClick = onReservationsClick
-        )
-        NavigationDrawerItem(
-            label = { Text("Profile") },
-            selected = selectedScreen == HomeScreen.PROFILE,
-            onClick = onProfileClick
-        )
-        NavigationDrawerItem(
-            label = { Text("About us") },
-            selected = selectedScreen == HomeScreen.ABOUT,
-            onClick = onAboutClick
-        )
-        NavigationDrawerItem(
-            label = { Text("Logout") },
-            selected = false,
-            onClick = onLogout
-        )
-    }
 }
 
 private fun HomeScreen.menuScreen(): HomeScreen =
@@ -467,13 +373,16 @@ private fun MyWishlistsScreen(
         if (wishlists.isEmpty()) {
             EmptyState("No wishlist yet. Create one to start.")
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f, fill = true),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 items(wishlists, key = { it.id }) { wishlist ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onOpenWishlist(wishlist.id) },
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -531,12 +440,15 @@ private fun WishlistDetailsScreen(
         if (giftItems.isEmpty()) {
             EmptyState("No gifts added to this wishlist yet.")
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f, fill = true),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 items(giftItems, key = { it.id }) { gift ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -544,10 +456,18 @@ private fun WishlistDetailsScreen(
                         ) {
                             Text(gift.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text(gift.description ?: "No description")
-                            Text("Priority: ${gift.priority.name} - Status: ${gift.status.name}")
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                GiftPriorityTag(priority = gift.priority)
+                                GiftStatusTag(status = gift.status)
+                            }
                             Text("Price: ${PriceFormatter.formatOrDash(gift.price)}")
                             gift.link?.let {
-                                Text(it, color = MaterialTheme.colorScheme.primary)
+                                Text(
+                                    text = it,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                             OutlinedButton(onClick = { onEditGift(gift.id) }) {
                                 Text("Edit")
@@ -578,29 +498,44 @@ private fun GiftEditorScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = if (state.giftItemId == null) "Add gift" else "Edit gift",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
-        OutlinedTextField(value = title, onValueChange = { title = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Title") })
-        OutlinedTextField(value = description, onValueChange = { description = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Description") })
-        OutlinedTextField(value = link, onValueChange = { link = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Link") })
-        OutlinedTextField(
-            value = price,
-            onValueChange = { price = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Price") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-        )
-        Text("Priority", style = MaterialTheme.typography.titleMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GiftPriority.entries.forEach { itemPriority ->
-                FilterChip(
-                    selected = priority == itemPriority,
-                    onClick = { priority = itemPriority },
-                    label = { Text(itemPriority.name) }
+        FrostedCard {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = if (state.giftItemId == null) "Add gift" else "Edit gift",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
                 )
+                OutlinedTextField(value = title, onValueChange = { title = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Title") }, shape = RoundedCornerShape(20.dp), colors = OutlinedTextFieldDefaults.colors())
+                OutlinedTextField(value = description, onValueChange = { description = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Description") }, shape = RoundedCornerShape(20.dp), colors = OutlinedTextFieldDefaults.colors())
+                OutlinedTextField(
+                    value = link,
+                    onValueChange = { link = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Link") },
+                    singleLine = true,
+                    maxLines = 1,
+                    shape = RoundedCornerShape(20.dp),
+                    colors = OutlinedTextFieldDefaults.colors()
+                )
+                OutlinedTextField(
+                    value = price,
+                    onValueChange = { price = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Price") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = OutlinedTextFieldDefaults.colors()
+                )
+                Text("Priority", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GiftPriority.entries.forEach { itemPriority ->
+                        SelectablePriorityTag(
+                            priority = itemPriority,
+                            selected = priority == itemPriority,
+                            onClick = { priority = itemPriority }
+                        )
+                    }
+                }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -630,6 +565,7 @@ private fun GiftEditorScreen(
 private fun PublicWishlistScreen(
     shareCode: String,
     wishlist: Wishlist?,
+    ownerName: String?,
     giftItems: List<GiftItem>,
     currentUser: User?,
     onShareCodeChanged: (String) -> Unit,
@@ -642,26 +578,30 @@ private fun PublicWishlistScreen(
     ) {
         Text("Public wishlist by link", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text("Demo share codes: ALICE2026, BOBTECH", color = MaterialTheme.colorScheme.primary)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = shareCode,
-                onValueChange = onShareCodeChanged,
-                modifier = Modifier.weight(1f),
-                label = { Text("Share code") }
-            )
-            Button(onClick = onLoad) {
-                Text("Open")
+        FrostedCard {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = shareCode,
+                    onValueChange = onShareCodeChanged,
+                    modifier = Modifier.weight(1f),
+                    label = { Text("Share code") },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = OutlinedTextFieldDefaults.colors()
+                )
+                Button(onClick = onLoad) {
+                    Text("Open")
+                }
             }
         }
 
         wishlist?.let {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -670,7 +610,7 @@ private fun PublicWishlistScreen(
                     Text(it.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(it.description ?: "No description")
                     Text(
-                        "Opened as ${currentUser?.name ?: "Unknown"}",
+                        text = "Owner: ${ownerName ?: it.ownerUserId}",
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -682,12 +622,15 @@ private fun PublicWishlistScreen(
         } else if (giftItems.isEmpty()) {
             EmptyState("No visible gifts in this shared wishlist.")
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f, fill = true),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 items(giftItems, key = { it.id }) { gift ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -695,8 +638,8 @@ private fun PublicWishlistScreen(
                         ) {
                             Text(gift.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text(gift.description ?: "No description")
-                            Text("Priority: ${gift.priority.name}")
-                            Text("Status: ${gift.status.name}")
+                            GiftPriorityTag(priority = gift.priority)
+                            GiftStatusTag(status = gift.status)
                             if (gift.status == GiftItemStatus.AVAILABLE) {
                                 Button(onClick = { onReserve(gift.id) }) {
                                     Text("Reserve")
@@ -726,12 +669,15 @@ private fun MyReservationsScreen(
         if (reservationCards.isEmpty()) {
             EmptyState("You have no reservations yet.")
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f, fill = true),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 items(reservationCards, key = { it.reservation.id }) { item ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -740,7 +686,7 @@ private fun MyReservationsScreen(
                             Text(item.giftTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text("Wishlist: ${item.wishlistTitle}")
                             Text("Owner: ${item.ownerName}")
-                            Text("Status: ${item.reservation.status.name}")
+                            ReservationStatusTag(status = item.reservation.status.name)
                             if (item.reservation.status.name == "ACTIVE") {
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Button(onClick = { onMarkGifted(item.reservation.id) }) {
@@ -760,198 +706,137 @@ private fun MyReservationsScreen(
 }
 
 @Composable
-private fun ProfileScreen(profile: UserProfile?) {
-    if (profile == null) {
-        EmptyState("Profile is loading...")
-        return
+private fun GiftStatusTag(status: GiftItemStatus) {
+    val (label, color) = when (status) {
+        GiftItemStatus.AVAILABLE -> "Available" to MaterialTheme.colorScheme.secondary
+        GiftItemStatus.RESERVED -> "Reserved" to MaterialTheme.colorScheme.tertiary
+        GiftItemStatus.GIFTED -> "Gifted" to MaterialTheme.colorScheme.primary
     }
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = color.copy(alpha = 0.22f),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.55f))
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelMedium
+        )
+    }
+}
+
+@Composable
+private fun GiftPriorityTag(priority: GiftPriority) {
+    val (label, color) = when (priority) {
+        GiftPriority.LOW -> "Low" to MaterialTheme.colorScheme.secondary
+        GiftPriority.MEDIUM -> "Medium" to MaterialTheme.colorScheme.tertiary
+        GiftPriority.HIGH -> "High" to MaterialTheme.colorScheme.primary
+    }
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = color.copy(alpha = 0.22f),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.55f))
+    ) {
+        Text(
+            text = "Priority: $label",
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelMedium
+        )
+    }
+}
+
+@Composable
+private fun SelectablePriorityTag(
+    priority: GiftPriority,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val (_, color) = when (priority) {
+        GiftPriority.LOW -> "Low" to MaterialTheme.colorScheme.secondary
+        GiftPriority.MEDIUM -> "Medium" to MaterialTheme.colorScheme.tertiary
+        GiftPriority.HIGH -> "High" to MaterialTheme.colorScheme.primary
+    }
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = if (selected) color.copy(alpha = 0.28f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        border = BorderStroke(1.dp, if (selected) color.copy(alpha = 0.75f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        Text(
+            text = priority.name.lowercase().replaceFirstChar { it.uppercase() },
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelMedium
+        )
+    }
+}
+
+@Composable
+private fun ReservationStatusTag(status: String) {
+    val normalized = status.uppercase()
+    val (label, color) = when (normalized) {
+        "ACTIVE" -> "Active" to MaterialTheme.colorScheme.tertiary
+        "GIFTED" -> "Gifted" to MaterialTheme.colorScheme.primary
+        "CANCELLED" -> "Cancelled" to MaterialTheme.colorScheme.onSurfaceVariant
+        else -> status to MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = color.copy(alpha = 0.22f),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.55f))
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelMedium
+        )
+    }
+}
+
+@Composable
+private fun ProfileScreen(
+    profile: UserProfile?,
+    currentUser: User?,
+    authorizedUserId: String?,
+    authorizedUserName: String?,
+    authorizedUserEmail: String?,
+    displayUserName: String,
+    onOpenAbout: () -> Unit,
+    onLogout: () -> Unit
+) {
+    val resolvedName = profile?.name?.takeIf { it.isNotBlank() }
+        ?: authorizedUserName?.takeIf { it.isNotBlank() }
+        ?: currentUser?.name?.takeIf { it.isNotBlank() }
+        ?: displayUserName
+    val resolvedEmail = profile?.email?.takeIf { it.isNotBlank() }
+        ?: authorizedUserEmail?.takeIf { it.isNotBlank() }
+        ?: "Not provided"
+    val resolvedUserId = profile?.userId?.takeIf { it.isNotBlank() }
+        ?: authorizedUserId?.takeIf { it.isNotBlank() }
+        ?: currentUser?.id?.takeIf { it.isNotBlank() }
+        ?: "Unknown"
+    val resolvedToken = profile?.fcmToken?.takeIf { it.isNotBlank() } ?: "-"
+    val resolvedUpdatedAt = profile?.updatedAtMillis?.takeIf { it > 0L }?.toString() ?: "-"
 
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("User profile", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text("User ID: ${profile.userId}")
-                Text("Name: ${profile.name}")
-                Text("Email: ${profile.email.ifBlank { "-" }}")
-                Text("FCM token: ${profile.fcmToken.ifBlank { "-" }}")
-                Text("Updated at: ${profile.updatedAtMillis}")
+        FrostedCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Profile", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("Name: $resolvedName")
+                Text("Email: $resolvedEmail")
+                Text("User ID: $resolvedUserId")
+                Text("FCM token: $resolvedToken")
+                Text("Updated at: $resolvedUpdatedAt")
             }
         }
-    }
-}
-
-@Composable
-private fun AboutUsScreen(
-    onMessage: (String) -> Unit,
-    onOpenHybridComposeDemo: () -> Unit
-) {
-    val context = LocalContext.current
-    val activity = context as? Activity
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val officePoint = remember { Point(55.3519, 86.0911) }
-    val mapView = remember { MapView(context) }
-    val fusedClient = remember(context) { LocationServices.getFusedLocationProviderClient(context) }
-    var showOpenSettings by remember { mutableStateOf(false) }
-
-    val requestRoute: () -> Unit = {
-        val tokenSource = CancellationTokenSource()
-        fusedClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, tokenSource.token)
-            .addOnSuccessListener { location ->
-                val launched = RouteLauncher.launchRoute(
-                    context = context,
-                    destinationLat = officePoint.latitude,
-                    destinationLon = officePoint.longitude,
-                    startLat = location?.latitude,
-                    startLon = location?.longitude
-                )
-                if (!launched) onMessage("Не удалось открыть навигатор")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(onClick = onOpenAbout, modifier = Modifier.weight(1f)) {
+                Text("About us")
             }
-            .addOnFailureListener {
-                val launched = RouteLauncher.launchRoute(
-                    context = context,
-                    destinationLat = officePoint.latitude,
-                    destinationLon = officePoint.longitude
-                )
-                if (!launched) onMessage("Не удалось открыть маршрут")
-            }
-    }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { grantedMap ->
-        val fineGranted = grantedMap[Manifest.permission.ACCESS_FINE_LOCATION] == true
-        val coarseGranted = grantedMap[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (fineGranted || coarseGranted) {
-            showOpenSettings = false
-            requestRoute()
-        } else {
-            onMessage("Доступ к геолокации отклонен. Строим маршрут без стартовой точки.")
-            val launched = RouteLauncher.launchRoute(
-                context = context,
-                destinationLat = officePoint.latitude,
-                destinationLon = officePoint.longitude
-            )
-            if (!launched) onMessage("Не удалось открыть маршрут")
-            val permanentlyDenied = activity != null &&
-                !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION) &&
-                !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)
-            showOpenSettings = permanentlyDenied
-        }
-    }
-
-    LaunchedEffect(mapView) {
-        mapView.mapWindow.map.move(
-            CameraPosition(officePoint, 16.0f, 0.0f, 0.0f)
-        )
-        mapView.mapWindow.map.mapObjects.clear()
-        mapView.mapWindow.map.mapObjects.addPlacemark(officePoint)
-    }
-
-    DisposableEffect(lifecycleOwner, mapView) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START -> {
-                    MapKitFactory.getInstance().onStart()
-                    mapView.onStart()
-                }
-
-                Lifecycle.Event.ON_STOP -> {
-                    mapView.onStop()
-                    MapKitFactory.getInstance().onStop()
-                }
-
-                else -> Unit
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(
-            text = "О нас",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = "Kuzbass Wish Lab - локальная команда, которая создает удобные цифровые сервисы для планирования подарков и совместных праздников."
-        )
-        Text(
-            text = "Офис: Россия, Кемеровская область - Кузбасс, г. Кемерово, Красная ул., 6",
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        AndroidView(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(280.dp)
-                .padding(vertical = 4.dp),
-            factory = { mapView }
-        )
-
-        Button(
-            onClick = {
-                val fineLocationGranted = ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED
-                val coarseLocationGranted = ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED
-
-                if (fineLocationGranted || coarseLocationGranted) {
-                    showOpenSettings = false
-                    requestRoute()
-                } else {
-                    permissionLauncher.launch(
-                        arrayOf(
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                        )
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Построить маршрут до офиса")
-        }
-
-        OutlinedButton(
-            onClick = onOpenHybridComposeDemo,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Open XML + Compose demo")
-        }
-
-        if (showOpenSettings) {
-            OutlinedButton(
-                onClick = {
-                    val intent = Intent(
-                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.parse("package:${context.packageName}")
-                    )
-                    context.startActivity(intent)
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Открыть настройки приложения")
+            OutlinedButton(onClick = onLogout, modifier = Modifier.weight(1f)) {
+                Text("Logout")
             }
         }
     }
@@ -969,16 +854,19 @@ private fun CreateWishlistDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
         title = { Text("Create wishlist") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = title, onValueChange = { title = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Title") })
-                OutlinedTextField(value = description, onValueChange = { description = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Description") })
+                OutlinedTextField(value = title, onValueChange = { title = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Title") }, shape = RoundedCornerShape(20.dp), colors = OutlinedTextFieldDefaults.colors())
+                OutlinedTextField(value = description, onValueChange = { description = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Description") }, shape = RoundedCornerShape(20.dp), colors = OutlinedTextFieldDefaults.colors())
                 OutlinedTextField(
                     value = shareCode,
                     onValueChange = { shareCode = it.uppercase() },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Share code") }
+                    label = { Text("Share code") },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = OutlinedTextFieldDefaults.colors()
                 )
                 FilterChip(
                     selected = isShared,
@@ -1011,6 +899,79 @@ private fun EmptyState(text: String) {
 }
 
 @Composable
+private fun BottomPillBar(
+    currentScreen: HomeScreen,
+    onWishlists: () -> Unit,
+    onPublic: () -> Unit,
+    onFriends: () -> Unit,
+    onProfile: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                BottomTabItem(
+                    selected = currentScreen.menuScreen() == HomeScreen.MY_WISHLISTS,
+                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    onClick = onWishlists
+                )
+                BottomTabItem(
+                    selected = currentScreen.menuScreen() == HomeScreen.PUBLIC_WISHLIST,
+                    icon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    onClick = onPublic
+                )
+                BottomTabItem(
+                    selected = currentScreen.menuScreen() == HomeScreen.MY_RESERVATIONS,
+                    icon = { Icon(Icons.Filled.Star, contentDescription = null) },
+                    onClick = onFriends
+                )
+                BottomTabItem(
+                    selected = currentScreen.menuScreen() == HomeScreen.PROFILE,
+                    icon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                    onClick = onProfile
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BottomTabItem(
+    selected: Boolean,
+    icon: @Composable () -> Unit,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.surface,
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            icon()
+        }
+    }
+}
+
+@Composable
 private fun FrostedCard(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
@@ -1032,3 +993,4 @@ private fun FrostedCard(
         }
     }
 }
+

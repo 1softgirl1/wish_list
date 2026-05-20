@@ -95,6 +95,7 @@ class ExternalAuthService @Inject constructor(
                     val token = accessToken.token
                     val firstName = accessToken.userData.firstName
                     val lastName = accessToken.userData.lastName
+                    val email = resolveVkEmail(accessToken)
                     val userName = listOf(firstName, lastName)
                         .filter { it.isNotBlank() }
                         .joinToString(" ")
@@ -107,7 +108,7 @@ class ExternalAuthService @Inject constructor(
                                 token = token,
                                 userName = userName,
                                 userId = "${AuthProvider.VK.name.lowercase()}_${token.take(12)}",
-                                email = null,
+                                email = email,
                                 provider = AuthProvider.VK,
                                 expiresAtMillis = accessToken.expireTime * 1000
                             )
@@ -228,4 +229,29 @@ class ExternalAuthService @Inject constructor(
         val name: String,
         val email: String?
     )
+
+    private fun resolveVkEmail(accessToken: AccessToken): String? {
+        // VK SDK versions expose email differently (or not at all),
+        // so we probe known shapes safely without hard dependency on one API shape.
+        val candidates = listOf(
+            runCatching { invokeStringGetter(accessToken, "getEmail") }.getOrNull(),
+            runCatching { readStringField(accessToken, "email") }.getOrNull(),
+            runCatching { accessToken.userData.let { invokeStringGetter(it, "getEmail") } }.getOrNull(),
+            runCatching { accessToken.userData.let { readStringField(it, "email") } }.getOrNull()
+        )
+        return candidates.firstOrNull { !it.isNullOrBlank() }
+    }
+
+    private fun invokeStringGetter(target: Any, methodName: String): String? {
+        val method = target.javaClass.methods.firstOrNull {
+            it.name == methodName && it.parameterCount == 0
+        } ?: return null
+        return (method.invoke(target) as? String)?.trim()?.ifBlank { null }
+    }
+
+    private fun readStringField(target: Any, fieldName: String): String? {
+        val field = target.javaClass.declaredFields.firstOrNull { it.name == fieldName } ?: return null
+        field.isAccessible = true
+        return (field.get(target) as? String)?.trim()?.ifBlank { null }
+    }
 }

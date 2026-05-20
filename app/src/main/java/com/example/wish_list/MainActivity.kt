@@ -23,7 +23,9 @@ import com.example.wish_list.firebase.UserProfileRepository
 import com.example.wish_list.ui.WishlistApp
 import com.example.wish_list.ui.WishlistViewModel
 import com.example.wish_list.ui.theme.Wish_listTheme
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.firestore.FirebaseFirestoreException
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
@@ -72,8 +74,20 @@ class MainActivity : ComponentActivity() {
                 if (loginState.isAuthorized) {
                     LaunchedEffect(loginState.authorizedSession?.userId) {
                         val session = loginState.authorizedSession ?: return@LaunchedEffect
-                        syncUserProfile(session)
-                        observeUserProfile(session.userId)
+                        ensureFirebaseUid(
+                            onReady = { firebaseUid ->
+                                viewModel.applyAuthorizedUser(
+                                    userId = session.userId,
+                                    userName = session.userName,
+                                    email = session.email
+                                )
+                                syncUserProfile(session)
+                                observeUserProfile(firebaseUid)
+                            },
+                            onError = {
+                                viewModel.postMessage("Firebase auth error: ${it.message ?: "unknown"}")
+                            }
+                        )
                     }
                     val userName = loginState.authorizedSession?.userName
                         ?.ifBlank { "User" }
@@ -83,7 +97,7 @@ class MainActivity : ComponentActivity() {
                         displayUserName = userName,
                         greetingText = viewModel.uiState.greetingText,
                         onLogout = loginViewModel::logout,
-                        onOpenHybridComposeDemo = {
+                        onOpenAboutUs = {
                             startActivity(Intent(this, HybridComposeActivity::class.java))
                         }
                     )
@@ -140,30 +154,84 @@ class MainActivity : ComponentActivity() {
             task.result?.let { token ->
                 fcmTokenRepository.saveToken(token)
                 secureSessionStore.load()?.let { session ->
-                    userProfileRepository.saveOrUpdateProfile(session, token)
+                    ensureFirebaseUid(
+                        onReady = { firebaseUid ->
+                            userProfileRepository.saveOrUpdateProfile(firebaseUid, session, token)
+                        },
+                        onError = {
+                            viewModel.postMessage("Firebase auth error: ${it.message ?: "unknown"}")
+                        }
+                    )
                 }
             }
         }
     }
 
     private fun syncUserProfile(session: AuthSession) {
-        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-            val token = if (task.isSuccessful) task.result else null
-            userProfileRepository.saveOrUpdateProfile(session, token)
-        }
+        ensureFirebaseUid(
+            onReady = { firebaseUid ->
+                FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                    val token = if (task.isSuccessful) task.result else null
+                    userProfileRepository.saveOrUpdateProfile(firebaseUid, session, token)
+                }
+            },
+            onError = {
+                viewModel.postMessage("Firebase auth error: ${it.message ?: "unknown"}")
+            }
+        )
     }
 
-    private fun observeUserProfile(userId: String) {
-        profileObserverJob?.cancel()
-        profileObserverJob = lifecycleScope.launch {
-            runCatching {
-                userProfileRepository.observeUserProfile(userId).collect { profile ->
-                    viewModel.applyUserProfile(profile)
+    private fun observeUserProfile(externalUserId: String) {
+        ensureFirebaseUid(
+            onReady = { firebaseUid ->
+                profileObserverJob?.cancel()
+                profileObserverJob = lifecycleScope.launch {
+                    runCatching {
+                        userProfileRepository.observeUserProfile(firebaseUid).collect { profile ->
+                            viewModel.applyUserProfile(profile)
+                        }
+                    }.onFailure {
+                        val message = when ((it as? FirebaseFirestoreException)?.code) {
+                            FirebaseFirestoreException.Code.PERMISSION_DENIED ->
+                                "Firestore: доступ запрещен (PERMISSION_DENIED). Проверьте rules для users/$firebaseUid."
+                            FirebaseFirestoreException.Code.UNAUTHENTICATED ->
+                                "Firestore: пользователь не аутентифицирован (UNAUTHENTICATED)."
+                            FirebaseFirestoreException.Code.UNAVAILABLE ->
+                                "Firestore: сервис временно недоступен (UNAVAILABLE). Проверьте сеть."
+                            FirebaseFirestoreException.Code.INVALID_ARGUMENT ->
+                                "Firestore: некорректный путь/данные (INVALID_ARGUMENT). Проверьте userId."
+                            else -> "Profile sync error: ${it.message ?: "unknown error"}"
+                        }
+                        viewModel.postMessage(message)
+                    }
                 }
-            }.onFailure {
-                viewModel.postMessage("Profile sync is unavailable. Check Firestore rules.")
+            },
+            onError = {
+                viewModel.postMessage("Firebase auth error for $externalUserId: ${it.message ?: "unknown"}")
             }
+        )
+    }
+
+    private fun ensureFirebaseUid(
+        onReady: (String) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        val auth = FirebaseAuth.getInstance()
+        val currentUid = auth.currentUser?.uid
+        if (!currentUid.isNullOrBlank()) {
+            onReady(currentUid)
+            return
         }
+        auth.signInAnonymously()
+            .addOnSuccessListener { result ->
+                val uid = result.user?.uid
+                if (uid.isNullOrBlank()) {
+                    onError(IllegalStateException("FirebaseAuth uid is null after signInAnonymously"))
+                } else {
+                    onReady(uid)
+                }
+            }
+            .addOnFailureListener(onError)
     }
 
     private fun fetchAndApplyRemoteConfig() {

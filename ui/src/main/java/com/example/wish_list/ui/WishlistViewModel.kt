@@ -11,6 +11,7 @@ import com.example.wish_list.domain.model.GiftItem
 import com.example.wish_list.domain.model.GiftItemStatus
 import com.example.wish_list.domain.model.GiftPriority
 import com.example.wish_list.domain.model.Reservation
+import com.example.wish_list.domain.model.ReservationStatus
 import com.example.wish_list.domain.model.User
 import com.example.wish_list.domain.model.UserProfile
 import com.example.wish_list.domain.model.Wishlist
@@ -68,9 +69,13 @@ data class WishlistUiState(
     val showCreateWishlistDialog: Boolean = false,
     val publicShareCode: String = "",
     val publicWishlist: Wishlist? = null,
+    val publicWishlistOwnerName: String? = null,
     val publicGiftItems: List<GiftItem> = emptyList(),
     val reservationCards: List<ReservationCardState> = emptyList(),
     val greetingText: String = "Добро пожаловать!",
+    val authorizedUserId: String? = null,
+    val authorizedUserName: String? = null,
+    val authorizedUserEmail: String? = null,
     val userProfile: UserProfile? = null,
     val message: String? = null,
     val isLoading: Boolean = false
@@ -148,6 +153,25 @@ class WishlistViewModel(
 
     fun applyUserProfile(profile: UserProfile?) {
         uiState = uiState.copy(userProfile = profile)
+    }
+
+    fun applyAuthorizedUser(
+        userId: String,
+        userName: String,
+        email: String?
+    ) {
+        launchAction {
+            userRepository.ensureCurrentUser(
+                userId = userId,
+                userName = userName
+            )
+            refreshSnapshot()
+            uiState = uiState.copy(
+                authorizedUserId = userId,
+                authorizedUserName = userName,
+                authorizedUserEmail = email
+            )
+        }
     }
 
     fun postMessage(message: String) {
@@ -332,17 +356,32 @@ class WishlistViewModel(
     private suspend fun refreshSnapshot() {
         val users = userRepository.getAllUsers()
         val currentUser = userRepository.getCurrentUser()
-        val wishlists = getMyWishlistsUseCase()
+        val fetchedWishlists = getMyWishlistsUseCase()
+        val shouldKeepExistingWishlists =
+            fetchedWishlists.isEmpty() &&
+                uiState.myWishlists.isNotEmpty() &&
+                uiState.currentUser?.id == currentUser?.id
+        val wishlists = if (shouldKeepExistingWishlists) uiState.myWishlists else fetchedWishlists
         val reservations = getMyReservationsUseCase()
-        val reservationCards = reservations.mapNotNull { reservation ->
+        val dedupedReservations = reservations
+            .groupBy { it.giftItemId }
+            .values
+            .map { sameGiftReservations ->
+                sameGiftReservations.minByOrNull { reservationStatusPriority(it.status) }
+                    ?: sameGiftReservations.first()
+            }
+            .distinctBy { it.id }
+        val reservationCards = dedupedReservations.mapNotNull { reservation ->
             val gift = giftItemRepository.getGiftItemById(reservation.giftItemId) ?: return@mapNotNull null
             val wishlist = wishlistRepository.getWishlistById(gift.wishlistId) ?: return@mapNotNull null
-            val owner = userRepository.getUserById(wishlist.ownerUserId) ?: return@mapNotNull null
+            val ownerName = userRepository.getUserById(wishlist.ownerUserId)?.name
+                ?.takeIf { it.isNotBlank() }
+                ?: "Unknown owner"
             ReservationCardState(
                 reservation = reservation,
                 giftTitle = gift.title,
                 wishlistTitle = wishlist.title,
-                ownerName = owner.name
+                ownerName = ownerName
             )
         }
 
@@ -379,15 +418,26 @@ class WishlistViewModel(
 
     private suspend fun loadPublicWishlist(shareCode: String) {
         val wishlist = getWishlistByShareCodeUseCase(shareCode)
+        val ownerName = userRepository.getUserById(wishlist.ownerUserId)?.name
+            ?.takeIf { it.isNotBlank() }
+            ?: wishlist.ownerUserId
         val giftItems = giftItemRepository.getGiftItemsByWishlistId(wishlist.id)
             .filter { it.status != GiftItemStatus.GIFTED }
 
         uiState = uiState.copy(
             publicWishlist = wishlist,
+            publicWishlistOwnerName = ownerName,
             publicGiftItems = giftItems,
             publicShareCode = shareCode
         )
     }
+
+    private fun reservationStatusPriority(status: ReservationStatus): Int =
+        when (status) {
+            ReservationStatus.ACTIVE -> 0
+            ReservationStatus.COMPLETED -> 1
+            ReservationStatus.CANCELLED -> 2
+        }
 
     private fun launchAction(block: suspend () -> Unit) {
         launchInScope {
