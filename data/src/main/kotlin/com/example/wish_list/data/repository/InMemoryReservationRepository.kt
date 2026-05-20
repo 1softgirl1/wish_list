@@ -6,8 +6,9 @@ import com.example.wish_list.data.mapper.toEntity
 import com.example.wish_list.domain.model.Reservation
 import com.example.wish_list.domain.model.ReservationStatus
 import com.example.wish_list.domain.repository.ReservationRepository
+import javax.inject.Inject
 
-class InMemoryReservationRepository(
+class InMemoryReservationRepository @Inject constructor(
     private val store: DemoLocalStore
 ) : ReservationRepository {
     override suspend fun getReservationById(reservationId: String): Reservation? {

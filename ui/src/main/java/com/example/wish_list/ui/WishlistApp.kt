@@ -7,22 +7,38 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -60,8 +76,10 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
@@ -83,13 +101,15 @@ import com.yandex.mapkit.geometry.Point
 import com.yandex.mapkit.map.CameraPosition
 import com.yandex.mapkit.mapview.MapView
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 @Composable
 fun WishlistApp(
     viewModel: WishlistViewModel,
     displayUserName: String,
     greetingText: String,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onOpenHybridComposeDemo: () -> Unit
 ) {
     val uiState = viewModel.uiState
     val snackbarHostState = remember { SnackbarHostState() }
@@ -162,13 +182,42 @@ fun WishlistApp(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                MaterialTheme.colorScheme.surface,
-                                MaterialTheme.colorScheme.surfaceContainerLowest
+                                MaterialTheme.colorScheme.background,
+                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
                             )
                         )
                     )
                     .padding(paddingValues)
             ) {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 24.dp, start = 12.dp)
+                        .size(180.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(999.dp)
+                        )
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 80.dp, end = 8.dp)
+                        .size(220.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f),
+                                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(999.dp)
+                        )
+                )
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -180,7 +229,8 @@ fun WishlistApp(
                             .weight(1f)
                             .fillMaxWidth()
                     ) {
-                        when (uiState.currentScreen) {
+                        AnimatedContent(targetState = uiState.currentScreen, label = "screen_transition") { screen ->
+                            when (screen) {
                             HomeScreen.MY_WISHLISTS -> MyWishlistsScreen(
                                 wishlists = uiState.myWishlists,
                                 onCreateWishlist = viewModel::openCreateWishlistDialog,
@@ -223,14 +273,21 @@ fun WishlistApp(
                             )
 
                             HomeScreen.ABOUT -> AboutUsScreen(
-                                onMessage = viewModel::postMessage
+                                onMessage = viewModel::postMessage,
+                                onOpenHybridComposeDemo = onOpenHybridComposeDemo
                             )
+                        }
                         }
                     }
                 }
 
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                AnimatedVisibility(
+                    visible = uiState.isLoading,
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut(),
+                    modifier = Modifier.align(Alignment.Center)
+                ) {
+                    CircularProgressIndicator()
                 }
             }
         }
@@ -251,10 +308,12 @@ private fun AppTopBar(
                 Text(
                     text = currentScreen.title(),
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = displayUserName,
+                    text = "Hi, $displayUserName",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -269,7 +328,8 @@ private fun AppTopBar(
             IconButton(onClick = onOpenMenu) {
                 Icon(
                     imageVector = Icons.Filled.MoreVert,
-                    contentDescription = "Open navigation menu"
+                    contentDescription = "Open navigation menu",
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -293,18 +353,22 @@ private fun DrawerContent(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text(
-            text = "Wish List MVP",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = "Signed in as $displayUserName",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        FrostedCard {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Wish List",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Signed in as $displayUserName",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
 
         NavigationDrawerItem(
             label = { Text("My wishlists") },
@@ -367,14 +431,37 @@ private fun MyWishlistsScreen(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        FrostedCard {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("My wishlists", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("${wishlists.size} collections", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Button(onClick = onCreateWishlist) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Spacer(Modifier.size(6.dp))
+                    Text("New")
+                }
+            }
+        }
+        AnimatedVisibility(
+            visible = true,
+            enter = slideInVertically(initialOffsetY = { it / 3 }) + fadeIn(),
+            exit = slideOutVertically() + fadeOut()
         ) {
-            Text("My wishlists", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Button(onClick = onCreateWishlist) {
-                Text("Create")
+            FrostedCard {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Star, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text(
+                        text = "Create and share wishlists in a couple of taps",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
         if (wishlists.isEmpty()) {
@@ -447,7 +534,8 @@ private fun WishlistDetailsScreen(
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(giftItems, key = { it.id }) { gift ->
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Column(
@@ -597,7 +685,8 @@ private fun PublicWishlistScreen(
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(giftItems, key = { it.id }) { gift ->
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Column(
@@ -640,7 +729,8 @@ private fun MyReservationsScreen(
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(reservationCards, key = { it.reservation.id }) { item ->
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Column(
@@ -701,7 +791,8 @@ private fun ProfileScreen(profile: UserProfile?) {
 
 @Composable
 private fun AboutUsScreen(
-    onMessage: (String) -> Unit
+    onMessage: (String) -> Unit,
+    onOpenHybridComposeDemo: () -> Unit
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -842,6 +933,13 @@ private fun AboutUsScreen(
             Text("Построить маршрут до офиса")
         }
 
+        OutlinedButton(
+            onClick = onOpenHybridComposeDemo,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Open XML + Compose demo")
+        }
+
         if (showOpenSettings) {
             OutlinedButton(
                 onClick = {
@@ -909,5 +1007,28 @@ private fun EmptyState(text: String) {
         contentAlignment = Alignment.Center
     ) {
         Text(text = text, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun FrostedCard(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .border(
+                BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                shape = RoundedCornerShape(22.dp)
+            ),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+        )
+    ) {
+        Box(modifier = Modifier.padding(16.dp)) {
+            content()
+        }
     }
 }

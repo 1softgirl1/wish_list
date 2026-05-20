@@ -2,8 +2,9 @@ package com.example.wish_list
 
 import com.example.wish_list.ui.analytics.AnalyticsService
 import io.appmetrica.analytics.AppMetrica
+import javax.inject.Inject
 
-class AppMetricaAnalyticsService : AnalyticsService {
+class AppMetricaAnalyticsService @Inject constructor() : AnalyticsService {
     override fun trackEvent(name: String, params: Map<String, Any>) {
         AppMetrica.reportEvent(name, params)
     }

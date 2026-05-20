@@ -1,49 +1,56 @@
 package com.example.wish_list
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.example.wish_list.data.DemoDataContainer
-import com.example.wish_list.auth.ExternalAuthService
+import com.example.wish_list.auth.AuthSession
 import com.example.wish_list.auth.LoginViewModel
 import com.example.wish_list.auth.SecureSessionStore
 import com.example.wish_list.firebase.AppNotificationHelper
-import com.example.wish_list.firebase.FirebaseRemoteConfigService
 import com.example.wish_list.firebase.FcmTokenRepository
 import com.example.wish_list.firebase.RemoteConfigService
 import com.example.wish_list.firebase.UserProfileRepository
-import com.google.firebase.messaging.FirebaseMessaging
 import com.example.wish_list.ui.WishlistApp
 import com.example.wish_list.ui.WishlistViewModel
 import com.example.wish_list.ui.theme.Wish_listTheme
-import kotlinx.coroutines.flow.collect
+import com.google.firebase.messaging.FirebaseMessaging
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    private val container = DemoDataContainer()
-    private val analyticsService = AppMetricaAnalyticsService()
-    private val remoteConfigService: RemoteConfigService = FirebaseRemoteConfigService()
-    private val secureSessionStore by lazy { SecureSessionStore(this) }
-    private val userProfileRepository = UserProfileRepository()
-    private var profileObserverJob: Job? = null
-    private val authService by lazy { ExternalAuthService(SecureSessionStore(this)) }
-    private val loginViewModel by lazy { LoginViewModel(authService, analyticsService) }
+    @Inject
+    lateinit var remoteConfigService: RemoteConfigService
 
-    private val viewModel: WishlistViewModel by lazy {
-        WishlistViewModel(
-            container = container,
-            analyticsService = analyticsService
-        )
-    }
+    @Inject
+    lateinit var secureSessionStore: SecureSessionStore
+
+    @Inject
+    lateinit var userProfileRepository: UserProfileRepository
+
+    @Inject
+    lateinit var fcmTokenRepository: FcmTokenRepository
+
+    @Inject
+    lateinit var wishlistViewModelFactory: WishlistViewModelFactory
+
+    private val loginViewModel: LoginViewModel by viewModels()
+    private val viewModel: WishlistViewModel by viewModels { wishlistViewModelFactory }
+
+    private var profileObserverJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,6 +60,7 @@ class MainActivity : ComponentActivity() {
         fetchAndStoreCurrentFcmToken()
         fetchAndApplyRemoteConfig()
         enableEdgeToEdge()
+
         setContent {
             Wish_listTheme {
                 val loginState = loginViewModel.uiState
@@ -74,7 +82,10 @@ class MainActivity : ComponentActivity() {
                         viewModel = viewModel,
                         displayUserName = userName,
                         greetingText = viewModel.uiState.greetingText,
-                        onLogout = loginViewModel::logout
+                        onLogout = loginViewModel::logout,
+                        onOpenHybridComposeDemo = {
+                            startActivity(Intent(this, HybridComposeActivity::class.java))
+                        }
                     )
                 } else {
                     LoginScreen(
@@ -88,7 +99,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onNewIntent(intent: android.content.Intent) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handlePushIntent(intent.extras)
     }
@@ -127,7 +138,7 @@ class MainActivity : ComponentActivity() {
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
             if (!task.isSuccessful) return@addOnCompleteListener
             task.result?.let { token ->
-                FcmTokenRepository(this).saveToken(token)
+                fcmTokenRepository.saveToken(token)
                 secureSessionStore.load()?.let { session ->
                     userProfileRepository.saveOrUpdateProfile(session, token)
                 }
@@ -135,7 +146,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun syncUserProfile(session: com.example.wish_list.auth.AuthSession) {
+    private fun syncUserProfile(session: AuthSession) {
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
             val token = if (task.isSuccessful) task.result else null
             userProfileRepository.saveOrUpdateProfile(session, token)

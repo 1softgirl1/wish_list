@@ -29,6 +29,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".HybridComposeActivity"
+            android:exported="false"
+            android:label="Hybrid Compose Demo"
+            android:theme="@style/Theme.Wish_list" />
 
         <service
             android:name=".firebase.PushMessagingService"

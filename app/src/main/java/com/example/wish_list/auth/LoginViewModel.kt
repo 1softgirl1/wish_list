@@ -6,8 +6,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
 import com.example.wish_list.ui.analytics.AnalyticsService
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 data class LoginUiState(
     val isLoading: Boolean = false,
@@ -18,7 +20,8 @@ data class LoginUiState(
         get() = authorizedSession != null
 }
 
-class LoginViewModel(
+@HiltViewModel
+class LoginViewModel @Inject constructor(
     private val authService: AuthService,
     private val analyticsService: AnalyticsService
 ) : ViewModel() {

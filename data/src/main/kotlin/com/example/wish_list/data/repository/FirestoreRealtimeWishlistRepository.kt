@@ -8,9 +8,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import javax.inject.Inject
 
-class FirestoreRealtimeWishlistRepository(
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+class FirestoreRealtimeWishlistRepository @Inject constructor(
+    private val firestore: FirebaseFirestore
 ) : RealtimeWishlistRepository {
     override fun observeWishlistsByOwner(ownerUserId: String): Flow<List<Wishlist>> = callbackFlow {
         val registration = firestore.collection(COLLECTION_WISHLISTS)

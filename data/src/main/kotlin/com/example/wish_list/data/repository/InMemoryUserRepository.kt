@@ -4,8 +4,9 @@ import com.example.wish_list.data.local.DemoLocalStore
 import com.example.wish_list.data.mapper.toDomain
 import com.example.wish_list.domain.model.User
 import com.example.wish_list.domain.repository.UserRepository
+import javax.inject.Inject
 
-class InMemoryUserRepository(
+class InMemoryUserRepository @Inject constructor(
     private val store: DemoLocalStore
 ) : UserRepository {
     override suspend fun getCurrentUser(): User? {

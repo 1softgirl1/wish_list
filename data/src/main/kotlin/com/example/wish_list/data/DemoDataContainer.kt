@@ -7,15 +7,18 @@ import com.example.wish_list.data.repository.InMemoryReservationRepository
 import com.example.wish_list.data.repository.InMemoryUserRepository
 import com.example.wish_list.data.repository.InMemoryWishlistRepository
 import com.example.wish_list.domain.repository.RealtimeWishlistRepository
+import javax.inject.Inject
 
-class DemoDataContainer {
-    private val store = DemoLocalStore()
+class DemoDataContainer @Inject constructor(
+    private val store: DemoLocalStore,
+    private val firestoreRealtimeWishlistRepository: FirestoreRealtimeWishlistRepository
+) {
 
     val userRepository = InMemoryUserRepository(store)
     val wishlistRepository = InMemoryWishlistRepository(store)
     val giftItemRepository = InMemoryGiftItemRepository(store)
     val reservationRepository = InMemoryReservationRepository(store)
     val realtimeWishlistRepository: RealtimeWishlistRepository? = runCatching {
-        FirestoreRealtimeWishlistRepository()
+        firestoreRealtimeWishlistRepository
     }.getOrNull()
 }

@@ -5,8 +5,9 @@ import com.example.wish_list.data.mapper.toDomain
 import com.example.wish_list.data.mapper.toEntity
 import com.example.wish_list.domain.model.Wishlist
 import com.example.wish_list.domain.repository.WishlistRepository
+import javax.inject.Inject
 
-class InMemoryWishlistRepository(
+class InMemoryWishlistRepository @Inject constructor(
     private val store: DemoLocalStore
 ) : WishlistRepository {
     override suspend fun getWishlistsByOwner(ownerUserId: String): List<Wishlist> {

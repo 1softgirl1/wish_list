@@ -25,6 +25,7 @@ dependencies {
     implementation(project(":domain"))
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore)
+    implementation("javax.inject:javax.inject:1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     testImplementation(libs.junit)
 }

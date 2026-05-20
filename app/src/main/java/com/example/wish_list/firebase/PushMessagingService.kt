@@ -2,6 +2,8 @@ package com.example.wish_list.firebase
 
 import android.content.Context
 import android.util.Log
+import com.example.wish_list.auth.SecureSessionStore
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
@@ -10,7 +12,11 @@ class PushMessagingService : FirebaseMessagingService() {
         super.onNewToken(token)
         saveTokenToPreferences(token)
         Log.d(TAG, "New FCM token: $token")
-        FcmTokenRepository(applicationContext).saveToken(token)
+        FcmTokenRepository(
+            context = applicationContext,
+            secureSessionStore = SecureSessionStore(applicationContext),
+            userProfileRepository = UserProfileRepository(FirebaseFirestore.getInstance())
+        ).saveToken(token)
     }
 
     override fun onMessageReceived(message: RemoteMessage) {

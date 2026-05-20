@@ -9,9 +9,10 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import java.util.Date
+import javax.inject.Inject
 
-class UserProfileRepository(
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+class UserProfileRepository @Inject constructor(
+    private val firestore: FirebaseFirestore
 ) {
     fun observeUserProfile(userId: String): Flow<UserProfile?> = callbackFlow {
         val registration = firestore.collection(COLLECTION_USERS)

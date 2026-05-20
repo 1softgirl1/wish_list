@@ -5,8 +5,9 @@ import com.example.wish_list.data.mapper.toDomain
 import com.example.wish_list.data.mapper.toEntity
 import com.example.wish_list.domain.model.GiftItem
 import com.example.wish_list.domain.repository.GiftItemRepository
+import javax.inject.Inject
 
-class InMemoryGiftItemRepository(
+class InMemoryGiftItemRepository @Inject constructor(
     private val store: DemoLocalStore
 ) : GiftItemRepository {
     override suspend fun getGiftItemById(giftItemId: String): GiftItem? {

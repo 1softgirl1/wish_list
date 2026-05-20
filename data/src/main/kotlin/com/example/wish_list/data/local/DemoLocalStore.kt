@@ -4,8 +4,9 @@ import com.example.wish_list.data.entity.GiftItemEntity
 import com.example.wish_list.data.entity.ReservationEntity
 import com.example.wish_list.data.entity.UserEntity
 import com.example.wish_list.data.entity.WishlistEntity
+import javax.inject.Inject
 
-class DemoLocalStore {
+class DemoLocalStore @Inject constructor() {
     private var userCounter = 3
     private var wishlistCounter = 3
     private var giftCounter = 5

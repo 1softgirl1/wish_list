@@ -5,6 +5,7 @@ import com.example.wish_list.R
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
 import kotlinx.coroutines.tasks.await
+import javax.inject.Inject
 
 data class RemoteConfigSnapshot(
     val greetingText: String,
@@ -12,8 +13,8 @@ data class RemoteConfigSnapshot(
     val maxItemsPerPage: Long
 )
 
-class FirebaseRemoteConfigService(
-    private val remoteConfig: FirebaseRemoteConfig = FirebaseRemoteConfig.getInstance()
+class FirebaseRemoteConfigService @Inject constructor(
+    private val remoteConfig: FirebaseRemoteConfig
 ) : RemoteConfigService {
     override suspend fun fetchAndActivate(isDebug: Boolean): RemoteConfigSnapshot {
         val settings = FirebaseRemoteConfigSettings.Builder()

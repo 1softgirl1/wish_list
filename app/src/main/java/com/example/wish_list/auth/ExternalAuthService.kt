@@ -18,10 +18,11 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
+import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.concurrent.thread
 
-class ExternalAuthService(
+class ExternalAuthService @Inject constructor(
     private val secureSessionStore: SecureSessionStore
 ) : AuthService {
 

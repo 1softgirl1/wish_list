@@ -2,14 +2,23 @@ package com.example.wish_list
 
 import android.app.Application
 import android.util.Log
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.example.wish_list.firebase.AppNotificationHelper
+import com.example.wish_list.work.RemoteConfigSyncWorker
 import io.appmetrica.analytics.AppMetrica
 import io.appmetrica.analytics.AppMetricaConfig
 import com.vk.id.VKID
 import com.yandex.mapkit.MapKitFactory
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
+import dagger.hilt.android.HiltAndroidApp
+import java.util.concurrent.TimeUnit
 
+@HiltAndroidApp
 class WishListApplication : Application() {
     override fun onCreate() {
         super.onCreate()
@@ -48,6 +57,7 @@ class WishListApplication : Application() {
 
         AppNotificationHelper(this).ensureChannel()
         initializeRemoteConfig()
+        schedulePeriodicRemoteConfigSync()
     }
 
     private fun String.maskForLog(): String {
@@ -63,5 +73,25 @@ class WishListApplication : Application() {
             .build()
         remoteConfig.setConfigSettingsAsync(settings)
         remoteConfig.setDefaultsAsync(R.xml.remote_config_defaults)
+    }
+
+    private fun schedulePeriodicRemoteConfigSync() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiresBatteryNotLow(true)
+            .build()
+        val periodicWork = PeriodicWorkRequestBuilder<RemoteConfigSyncWorker>(6, TimeUnit.HOURS)
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            REMOTE_CONFIG_SYNC_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            periodicWork
+        )
+    }
+
+    private companion object {
+        private const val REMOTE_CONFIG_SYNC_WORK_NAME = "remote_config_sync"
     }
 }

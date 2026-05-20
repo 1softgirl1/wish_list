@@ -3,8 +3,12 @@ package com.example.wish_list.auth
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 
-class SecureSessionStore(context: Context) {
+class SecureSessionStore @Inject constructor(
+    @ApplicationContext context: Context
+) {
     private val preferences = EncryptedSharedPreferences.create(
         context,
         FILE_NAME,
